@@ -1,7 +1,6 @@
 import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -67,48 +66,33 @@ class _AndroidCardFieldState extends State<AndroidCardField> {
     return ConstrainedBox(
       constraints:
           const BoxConstraints.tightFor(height: kApplePayButtonDefaultHeight),
-      child: PlatformViewLink(
-        viewType: viewType,
-        surfaceFactory: (context, controller) => Focus(
-          focusNode: _focusNode,
-          onFocusChange: _onFocusChange,
-          child: AndroidViewSurface(
-            controller: controller
-                // ignore: avoid_as
-                as AndroidViewController, // TODO get rid of casting?
-            gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
-            hitTestBehavior: PlatformViewHitTestBehavior.opaque,
-          ),
-        ),
-        onCreatePlatformView: (params) {
-          methodChannel =
-              MethodChannel('flutter.stripe/card_field/${params.id}');
-          methodChannel.setMethodCallHandler((call) async {
-            if (call.method == 'topFocusChange') {
-              try {
-                final arguments = Map<String, dynamic>.from(call.arguments);
-                onFocusChanged(arguments);
-              } on Exception catch (e) {
-                // todo:  how to handle this errors?
-                log('Error', error: e);
+      child: Focus(
+        focusNode: _focusNode,
+        onFocusChange: _onFocusChange,
+        child: AndroidView(
+          hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+          viewType: viewType,
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec(),
+          onPlatformViewCreated: (viewId) {
+            _viewId = viewId;
+            methodChannel = MethodChannel('flutter.stripe/card_field/$viewId');
+            methodChannel.setMethodCallHandler((call) async {
+              if (call.method == 'topFocusChange') {
+                try {
+                  final arguments = Map<String, dynamic>.from(call.arguments);
+                  onFocusChanged(arguments);
+                } on Exception catch (e) {
+                  // todo:  how to handle this errors?
+                  log('Error', error: e);
+                }
+              } else if (call.method == 'onCardChange') {
+                onCardChanged(Map<String, dynamic>.from(call.arguments));
               }
-            } else if (call.method == 'onCardChange') {
-              onCardChanged(Map<String, dynamic>.from(call.arguments));
-            }
-            return;
-          });
-          _viewId = params.id;
-          return PlatformViewsService.initSurfaceAndroidView(
-            id: params.id,
-            viewType: viewType,
-            layoutDirection: TextDirection.ltr,
-            creationParams: creationParams,
-            creationParamsCodec: const StandardMessageCodec(),
-            //onFocus: _onFocusChange
-          )
-            ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
-            ..create();
-        },
+              return;
+            });
+          },
+        ),
       ),
     );
   }
